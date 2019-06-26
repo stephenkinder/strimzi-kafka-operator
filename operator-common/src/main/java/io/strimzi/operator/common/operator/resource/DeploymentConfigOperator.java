@@ -21,6 +21,7 @@ public class DeploymentConfigOperator extends AbstractScalableResourceOperator<O
      * Constructor
      * @param vertx The Vertx instance
      * @param client The Kubernetes client
+     * @param operationTimeoutMs Timeout
      */
     public DeploymentConfigOperator(Vertx vertx, OpenShiftClient client, long operationTimeoutMs) {
         super(vertx, client, "DeploymentConfig", operationTimeoutMs);

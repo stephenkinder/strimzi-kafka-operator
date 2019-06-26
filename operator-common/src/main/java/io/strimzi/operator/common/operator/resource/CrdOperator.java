@@ -40,6 +40,7 @@ public class CrdOperator<C extends KubernetesClient,
      * @param cls The class of the CR
      * @param listCls The class of the list.
      * @param doneableCls The class of the CR's "doneable".
+     * @param operationTimeoutMs Timeout
      */
     public CrdOperator(Vertx vertx, C client, Class<T> cls, Class<L> listCls, Class<D> doneableCls, long operationTimeoutMs) {
         super(vertx, client, Crds.kind(cls), operationTimeoutMs);

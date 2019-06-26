@@ -100,6 +100,8 @@ public class ResourceSupport {
      * When the {@code watchFn} returns non-null the watch will be closed and then
      * the future returned from this method will be completed on the context thread.
      * @param watchable The watchable.
+     * @param watchFnDescription A description of what {@code watchFn} is watching for.
+     *                           E.g. "observe ${condition} of ${kind} ${namespace}/${name}".
      * @param watchFn The function to determine
      * @param <T> The type of watched resource.
      * @param <U> The result type of the {@code watchFn}.
@@ -108,6 +110,7 @@ public class ResourceSupport {
      * in response to some Kubenetes even on the watched resource(s).
      */
     public <T, U> Future<U> selfClosingWatch(Watchable<Watch, Watcher<T>> watchable,
+                                             String watchFnDescription,
                                              BiFunction<Watcher.Action, T, U> watchFn) {
 
         return new Watcher<T>() {
@@ -122,7 +125,7 @@ public class ResourceSupport {
                 this.doneFuture = Future.future();
                 this.resultFuture = Future.future();
                 this.timerId = vertx.setTimer(operationTimeoutMs, ignored -> {
-                    doneFuture.tryFail(new TimeoutException());
+                    doneFuture.tryFail(new TimeoutException(watchFnDescription));
                 });
                 CompositeFuture.join(watchFuture, doneFuture).setHandler(joinResult -> {
                     Future<Void> closeFuture;
@@ -133,7 +136,7 @@ public class ResourceSupport {
                     }
                     closeFuture.setHandler(closeResult -> {
                         vertx.runOnContext(ignored2 -> {
-                            LOGGER.warn("Completing watch future");
+                            LOGGER.debug("Completing watch future");
                             if (joinResult.succeeded() && closeResult.succeeded()) {
                                 resultFuture.complete(joinResult.result().resultAt(1));
                             } else {
@@ -143,7 +146,7 @@ public class ResourceSupport {
                     });
                 });
                 Watch watch = watchable.watch(this);
-                LOGGER.debug("Opened watch {}", watch);
+                LOGGER.debug("Opened watch {} for evaluation of {}", watch, watchFnDescription);
                 watchFuture.complete(watch);
             }
 
@@ -157,12 +160,12 @@ public class ResourceSupport {
                                 f.tryComplete(apply);
                                 vertx.cancelTimer(timerId);
                             } else {
-                                LOGGER.debug("Not yet complete");
+                                LOGGER.debug("Not yet satisfied: {}", watchFnDescription);
                             }
                         } catch (Throwable t) {
                             if (!f.tryFail(t)) {
                                 LOGGER.debug("Ignoring exception thrown while " +
-                                        "evaluating watch because the future was already completed", t);
+                                        "evaluating watch {} because the future was already completed", watchFnDescription, t);
                             }
                         }
                     },
@@ -183,7 +186,7 @@ public class ResourceSupport {
     /**
      * Asynchronously deletes the given resource(s), returning a Future which completes on the context thread.
      * <strong>Note: The API server can return asynchronously, meaning the resource is still accessible from the API server
-     * after the returned Future completes. Use {@link #selfClosingWatch(Watchable, BiFunction)}
+     * after the returned Future completes. Use {@link #selfClosingWatch(Watchable, String, BiFunction)}
      * to provide server-synchronous semantics.</strong>
      *
      * @param resource The resource(s) to delete.
@@ -236,8 +239,7 @@ public class ResourceSupport {
      * @param resource The resources to list.
      * @return A Future which completes on the context thread.
      */
-    <T extends HasMetadata, L extends KubernetesResourceList<T>>
-    Future<List<T>> listAsync(Listable<L> resource) {
+    <T extends HasMetadata, L extends KubernetesResourceList<T>> Future<List<T>> listAsync(Listable<L> resource) {
         Future<List<T>> listFuture = Future.future();
         executeBlocking(
             blockingFuture -> {

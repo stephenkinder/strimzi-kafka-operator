@@ -129,6 +129,7 @@ public abstract class AbstractNonNamespacedResourceOperator<C extends Kubernetes
     private Future<ReconcileResult<T>> internalDelete(String name) {
         R resourceOp = operation().withName(name);
         Future<ReconcileResult<T>> watchForDeleteFuture = resourceSupport.selfClosingWatch(resourceOp,
+            "observe deletion of " + resourceKind + " " + name,
             (action, resource) -> {
                 if (action == Watcher.Action.DELETED) {
                     log.debug("{} {} has been deleted", resourceKind, name);

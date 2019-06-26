@@ -79,7 +79,7 @@ public class ResourceOperatorSupplier {
     }
 
     public ResourceOperatorSupplier(Vertx vertx, KubernetesClient client, ZookeeperLeaderFinder zlf, PlatformFeaturesAvailability pfa, long operationTimeoutMs) {
-        this(new ServiceOperator(vertx, client),
+        this(new ServiceOperator(vertx, client, operationTimeoutMs),
                 pfa.hasRoutes() ? new RouteOperator(vertx, client.adapt(OpenShiftClient.class), operationTimeoutMs) : null,
                 new ZookeeperSetOperator(vertx, client, zlf, operationTimeoutMs),
                 new KafkaSetOperator(vertx, client, operationTimeoutMs),

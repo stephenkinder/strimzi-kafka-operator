@@ -50,7 +50,7 @@ public abstract class StatefulSetOperator extends AbstractScalableResourceOperat
      * @param operationTimeoutMs The timeout.
      */
     public StatefulSetOperator(Vertx vertx, KubernetesClient client, long operationTimeoutMs) {
-        this(vertx, client, operationTimeoutMs, new PodOperator(vertx, client), new PvcOperator(vertx, client));
+        this(vertx, client, operationTimeoutMs, new PodOperator(vertx, client, operationTimeoutMs), new PvcOperator(vertx, client, operationTimeoutMs));
     }
 
     public StatefulSetOperator(Vertx vertx, KubernetesClient client, long operationTimeoutMs, PodOperator podOperator, PvcOperator pvcOperator) {

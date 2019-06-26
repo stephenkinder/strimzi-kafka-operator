@@ -45,6 +45,7 @@ public abstract class AbstractScalableResourceOperator<C extends KubernetesClien
      * @param vertx The Vertx instance
      * @param client The Kubernetes client
      * @param resourceKind The kind of resource.
+     * @param operationTimeoutMs Timeout
      */
     public AbstractScalableResourceOperator(Vertx vertx, C client, String resourceKind, long operationTimeoutMs) {
         super(vertx, client, resourceKind, operationTimeoutMs);

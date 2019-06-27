@@ -145,9 +145,13 @@ public class ResourceSupport {
                         });
                     });
                 });
-                Watch watch = watchable.watch(this);
-                LOGGER.debug("Opened watch {} for evaluation of {}", watch, watchFnDescription);
-                watchFuture.complete(watch);
+                try {
+                    Watch watch = watchable.watch(this);
+                    LOGGER.debug("Opened watch {} for evaluation of {}", watch, watchFnDescription);
+                    watchFuture.complete(watch);
+                } catch (Throwable t) {
+                    watchFuture.fail(t);
+                }
             }
 
             @Override
@@ -171,7 +175,11 @@ public class ResourceSupport {
                     },
                     true,
                     ar -> {
-                        doneFuture.handle(ar);
+                        if (ar.succeeded()) {
+                            doneFuture.tryComplete(ar.result());
+                        } else {
+                            doneFuture.tryFail(ar.cause());
+                        }
                     });
             }
 

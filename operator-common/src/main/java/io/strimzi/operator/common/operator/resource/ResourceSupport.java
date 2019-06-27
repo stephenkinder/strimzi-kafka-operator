@@ -44,8 +44,7 @@ public class ResourceSupport {
      * @return The Future
      */
     public Future<Void> closeOnWorkerThread(Closeable closeable) {
-        Future<Void> result = Future.future();
-        executeBlocking(
+        return executeBlocking(
             blockingFuture -> {
                 try {
                     LOGGER.debug("Closing {}", closeable);
@@ -54,17 +53,14 @@ public class ResourceSupport {
                 } catch (Throwable t) {
                     blockingFuture.fail(t);
                 }
-            },
-            true,
-            result);
-        return result;
+            });
     }
 
-    private <T> void executeBlocking(Handler<Future<T>> blockingCodeHandler,
-                                     boolean ordered,
-                                     Handler<AsyncResult<T>> resultHandler) {
+    private <T> Future<T> executeBlocking(Handler<Future<T>> blockingCodeHandler) {
+        Future<T> result = Future.future();
         vertx.createSharedWorkerExecutor("kubernetes-ops-tool")
-                .executeBlocking(blockingCodeHandler, ordered, resultHandler);
+                .executeBlocking(blockingCodeHandler, true, result);
+        return result;
     }
 
     /**
@@ -76,8 +72,8 @@ public class ResourceSupport {
      * @param secondary The secondary failure.
      * @return The cause.
      */
-    Throwable collectCauses(AsyncResult<? extends Object> primary,
-                            AsyncResult<? extends Object> secondary) {
+    private Throwable collectCauses(AsyncResult<?> primary,
+                            AsyncResult<?> secondary) {
         Throwable cause = primary.cause();
         if (cause == null) {
             cause = secondary.cause();
@@ -109,9 +105,9 @@ public class ResourceSupport {
      * @return A Futures which completes when the {@code watchFn} returns non-null
      * in response to some Kubenetes even on the watched resource(s).
      */
-    public <T, U> Future<U> selfClosingWatch(Watchable<Watch, Watcher<T>> watchable,
-                                             String watchFnDescription,
-                                             BiFunction<Watcher.Action, T, U> watchFn) {
+    <T, U> Future<U> selfClosingWatch(Watchable<Watch, Watcher<T>> watchable,
+                                      String watchFnDescription,
+                                      BiFunction<Watcher.Action, T, U> watchFn) {
 
         return new Watcher<T>() {
             private final Future<Watch> watchFuture;
@@ -124,9 +120,8 @@ public class ResourceSupport {
                 this.watchFuture = Future.future();
                 this.doneFuture = Future.future();
                 this.resultFuture = Future.future();
-                this.timerId = vertx.setTimer(operationTimeoutMs, ignored -> {
-                    doneFuture.tryFail(new TimeoutException(watchFnDescription));
-                });
+                this.timerId = vertx.setTimer(operationTimeoutMs,
+                    ignored -> doneFuture.tryFail(new TimeoutException(watchFnDescription)));
                 CompositeFuture.join(watchFuture, doneFuture).setHandler(joinResult -> {
                     Future<Void> closeFuture;
                     if (watchFuture.succeeded()) {
@@ -134,7 +129,7 @@ public class ResourceSupport {
                     } else {
                         closeFuture = Future.succeededFuture();
                     }
-                    closeFuture.setHandler(closeResult -> {
+                    closeFuture.setHandler(closeResult ->
                         vertx.runOnContext(ignored2 -> {
                             LOGGER.debug("Completing watch future");
                             if (joinResult.succeeded() && closeResult.succeeded()) {
@@ -142,8 +137,8 @@ public class ResourceSupport {
                             } else {
                                 resultFuture.fail(collectCauses(joinResult, closeResult));
                             }
-                        });
-                    });
+                        }
+                    ));
                 });
                 try {
                     Watch watch = watchable.watch(this);
@@ -201,8 +196,7 @@ public class ResourceSupport {
      * @return A Future which completes on the context thread.
      */
     Future<Void> deleteAsync(Deletable<Boolean> resource) {
-        Future<Void> deleteFuture = Future.future();
-        executeBlocking(
+        return executeBlocking(
             blockingFuture -> {
                 try {
                     Boolean delete = resource.delete();
@@ -214,10 +208,7 @@ public class ResourceSupport {
                 } catch (Throwable t) {
                     blockingFuture.fail(t);
                 }
-            },
-            true,
-            deleteFuture);
-        return deleteFuture;
+            });
     }
 
     /**
@@ -227,18 +218,14 @@ public class ResourceSupport {
      * @return A Future which completes on the context thread.
      */
     <T> Future<T> getAsync(Gettable<T> resource) {
-        Future<T> getFuture = Future.future();
-        executeBlocking(
+        return executeBlocking(
             blockingFuture -> {
                 try {
                     blockingFuture.complete(resource.get());
                 } catch (Throwable t) {
                     blockingFuture.fail(t);
                 }
-            },
-            true,
-            getFuture);
-        return getFuture;
+            });
     }
 
     /**
@@ -248,18 +235,13 @@ public class ResourceSupport {
      * @return A Future which completes on the context thread.
      */
     <T extends HasMetadata, L extends KubernetesResourceList<T>> Future<List<T>> listAsync(Listable<L> resource) {
-        Future<List<T>> listFuture = Future.future();
-        executeBlocking(
+        return executeBlocking(
             blockingFuture -> {
                 try {
                     blockingFuture.complete(resource.list().getItems());
                 } catch (Throwable t) {
                     blockingFuture.fail(t);
                 }
-            },
-            true,
-            listFuture
-        );
-        return listFuture;
+            });
     }
 }

@@ -117,11 +117,11 @@ public final class TestUtils {
             }
             if (timeLeft <= 0) {
                 onTimeout.run();
-                throw new TimeoutException("Timeout after " + timeoutMs + " ms waiting for " + description + " to be ready");
+                throw new TimeoutException("Timeout after " + timeoutMs + " ms waiting for " + description + " to complete");
             }
             long sleepTime = Math.min(pollIntervalMs, timeLeft);
             if (LOGGER.isTraceEnabled()) {
-                LOGGER.trace("{} not ready, will try again in {} ms ({}ms till timeout)", description, sleepTime, timeLeft);
+                LOGGER.trace("{} not complete, will try again in {} ms ({}ms till timeout)", description, sleepTime, timeLeft);
             }
             try {
                 Thread.sleep(sleepTime);

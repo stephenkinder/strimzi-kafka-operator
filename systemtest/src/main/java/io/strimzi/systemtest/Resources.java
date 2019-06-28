@@ -4,12 +4,15 @@
  */
 package io.strimzi.systemtest;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import io.fabric8.kubernetes.api.model.ContainerBuilder;
 import io.fabric8.kubernetes.api.model.DoneableService;
 import io.fabric8.kubernetes.api.model.EnvVar;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.IntOrString;
 import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
+import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.PodSpec;
 import io.fabric8.kubernetes.api.model.PodSpecBuilder;
 import io.fabric8.kubernetes.api.model.Quantity;
@@ -26,10 +29,10 @@ import io.fabric8.kubernetes.api.model.extensions.Ingress;
 import io.fabric8.kubernetes.api.model.extensions.IngressBackend;
 import io.fabric8.kubernetes.api.model.extensions.IngressBuilder;
 import io.fabric8.kubernetes.api.model.extensions.IngressRuleBuilder;
-import io.fabric8.kubernetes.api.model.rbac.DoneableClusterRoleBinding;
-import io.fabric8.kubernetes.api.model.rbac.DoneableRoleBinding;
 import io.fabric8.kubernetes.api.model.rbac.ClusterRoleBinding;
 import io.fabric8.kubernetes.api.model.rbac.ClusterRoleBindingBuilder;
+import io.fabric8.kubernetes.api.model.rbac.DoneableClusterRoleBinding;
+import io.fabric8.kubernetes.api.model.rbac.DoneableRoleBinding;
 import io.fabric8.kubernetes.api.model.rbac.RoleBinding;
 import io.fabric8.kubernetes.api.model.rbac.RoleBindingBuilder;
 import io.fabric8.kubernetes.api.model.rbac.SubjectBuilder;
@@ -572,8 +575,17 @@ public class Resources extends AbstractResources {
     private void waitForPodDeletion(String name) {
         LOGGER.info("Waiting when Pod {}  in namespace {} will be deleted", name, client().getNamespace());
 
-        TestUtils.waitFor("pod " + name + " deletion", Constants.POLL_INTERVAL_FOR_RESOURCE_READINESS, Constants.TIMEOUT_FOR_RESOURCE_READINESS,
-            () -> client().getPod(name) == null);
+        TestUtils.waitFor("deletion of pod " + name, Constants.POLL_INTERVAL_FOR_RESOURCE_READINESS, Constants.TIMEOUT_FOR_RESOURCE_READINESS,
+            () -> client().getPod(name) == null,
+            () -> {
+                for (Pod pod : client().listPods()) {
+                    try {
+                        LOGGER.info("Remaining pod on deletion timeout for {}: {}", name, new YAMLMapper().writeValueAsString(pod));
+                    } catch (JsonProcessingException e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
     }
 
     public DoneableKafkaTopic topic(String clusterName, String topicName) {

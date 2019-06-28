@@ -121,7 +121,7 @@ public class ResourceSupport {
                 this.doneFuture = Future.future();
                 this.resultFuture = Future.future();
                 this.timerId = vertx.setTimer(operationTimeoutMs,
-                    ignored -> doneFuture.tryFail(new TimeoutException(watchFnDescription)));
+                    ignored -> doneFuture.tryFail(new TimeoutException("\"" + watchFnDescription + "\" timed out after " + operationTimeoutMs + "ms")));
                 CompositeFuture.join(watchFuture, doneFuture).setHandler(joinResult -> {
                     Future<Void> closeFuture;
                     if (watchFuture.succeeded()) {

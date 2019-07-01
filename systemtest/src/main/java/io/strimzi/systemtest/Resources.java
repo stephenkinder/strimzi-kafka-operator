@@ -37,7 +37,10 @@ import io.fabric8.kubernetes.api.model.rbac.RoleBinding;
 import io.fabric8.kubernetes.api.model.rbac.RoleBindingBuilder;
 import io.fabric8.kubernetes.api.model.rbac.SubjectBuilder;
 import io.fabric8.kubernetes.client.KubernetesClientException;
+import io.fabric8.kubernetes.client.Watch;
+import io.fabric8.kubernetes.client.Watcher;
 import io.fabric8.kubernetes.client.dsl.MixedOperation;
+import io.fabric8.kubernetes.client.dsl.RollableScalableResource;
 import io.fabric8.openshift.client.OpenShiftClient;
 import io.strimzi.api.kafka.model.DoneableKafka;
 import io.strimzi.api.kafka.model.DoneableKafkaBridge;
@@ -105,7 +108,7 @@ public class Resources extends AbstractResources {
         super(client);
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "deprecation"})
     private <T extends HasMetadata> T deleteLater(MixedOperation<T, ?, ?, ?> x, T resource) {
         LOGGER.info("Scheduled deletion of {} {}", resource.getKind(), resource.getMetadata().getName());
         switch (resource.getKind()) {
@@ -118,9 +121,46 @@ public class Resources extends AbstractResources {
                 break;
             case KafkaConnect.RESOURCE_KIND:
                 resources.push(() -> {
-                    LOGGER.info("Deleting {} {}", resource.getKind(), resource.getMetadata().getName());
-                    x.inNamespace(resource.getMetadata().getNamespace()).delete(resource);
+                    LOGGER.info("### Deleting {} {}", resource.getKind(), resource.getMetadata().getName());
+                    try {
+                        RollableScalableResource<Deployment, DoneableDeployment> deploymentResource = client().getClient().extensions().deployments().withName(resource.getMetadata().getName() + "-connect");
+                        LOGGER.info("### Connect deployment", new YAMLMapper().writeValueAsString(deploymentResource.get()));
+                        deploymentResource.watch(new Watcher<Deployment>() {
+                            @Override
+                            public void eventReceived(Action action, Deployment resource) {
+                                LOGGER.info("### DEPLOYMENT {} {}", action, resource.getMetadata().getName());
+                            }
+
+                            @Override
+                            public void onClose(KubernetesClientException cause) {
+
+                            }
+                        });
+                    } catch (JsonProcessingException e) {
+                        e.printStackTrace();
+                    }
+                    Watch w = x.inNamespace(resource.getMetadata().getNamespace())
+                            .withName(resource.getMetadata().getName())
+                            .watch(new Watcher<T>() {
+                                @Override
+                                public void eventReceived(Action action, T resource) {
+                                    LOGGER.info("### KAFKACONNECT {} {}", action, resource.getMetadata().getName());
+                                }
+
+                                @Override
+                                public void onClose(KubernetesClientException cause) {
+
+                                }
+                            });
+                    Boolean delete = x.inNamespace(resource.getMetadata().getNamespace())
+                            .withName(resource.getMetadata().getName())
+                            .delete();
+                    if (delete) {
+                        LOGGER.info("### {} {} was {}", resource.getKind(), resource.getMetadata().getName(),
+                                delete ? "deleted" : "NOT deleted");
+                    }
                     waitForDeletion((KafkaConnect) resource);
+                    w.close();
                 });
                 break;
             case KafkaConnectS2I.RESOURCE_KIND:
@@ -533,8 +573,7 @@ public class Resources extends AbstractResources {
     }
 
     private void waitForDeletion(KafkaConnect kafkaConnect) {
-        LOGGER.info("Waiting when all the pods are terminated for Kafka Connect {}", kafkaConnect.getMetadata().getName());
-
+        LOGGER.info("### Waiting when all the pods are terminated for Kafka Connect {}", kafkaConnect.getMetadata().getName());
         client().listPods().stream()
                 .filter(p -> p.getMetadata().getName().startsWith(kafkaConnect.getMetadata().getName() + "-connect-"))
                 .forEach(p -> waitForPodDeletion(p.getMetadata().getName()));
